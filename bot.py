@@ -20,26 +20,27 @@ async def movie_handler(client, message):
     
     try:
         res = requests.post(API_URL, json={"query": query})
-
-        # ✅ Debug logs (Termux me dekhne ke liye)
-        print("URL:", API_URL)
         print("Status Code:", res.status_code)
-        print("Response Text:", res.text)
+        print("Response:", res.text)
 
         data = res.json()
-        print("Parsed JSON:", data)
+        print("Parsed:", data)
 
-        # ✅ Check response
         if data.get("file_id"):
-            await message.reply_video(data["file_id"], caption=f"🎬 {data['title']} ({data.get('year', '')})\nSize: {data.get('size', '')}")
+            await message.reply_document(
+                data["file_id"],
+                caption=f"🎬 {data['title']} ({data.get('year', '')})\nSize: {data.get('size', '')}"
+            )
         elif data.get("terabox_url"):
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("📥 Download from TeraBox", url=data["terabox_url"])]])
-            await message.reply(f"🎬 {data['title']}\nNo Telegram file found. Download via TeraBox:", reply_markup=kb)
+            await message.reply(
+                f"🎬 {data['title']}\nNo Telegram file found. Download via TeraBox:",
+                reply_markup=kb
+            )
         else:
             await message.reply("❌ Movie not found.")
     
     except Exception as e:
-        # ✅ Show real error on Telegram
-        await message.reply(f"⚠️ Error fetching movie.\n\nError: `{str(e)}`", parse_mode="markdown")
+        await message.reply(f"⚠️ Error fetching movie.\n\nError: {str(e)}")
 
 bot.run()
