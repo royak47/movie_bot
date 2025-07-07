@@ -1,10 +1,17 @@
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
+import os
+from dotenv import load_dotenv
 
-API_URL = "https://movie-bot-afgg.onrender.com/search"
+load_dotenv()
 
-bot = Client("movie_bot", bot_token="7427633281:AAHRsU_1u_Pjc9Eo3dBwAVG6G1jutaSZy9I", api_id=12345, api_hash="your_api_hash")
+API_URL = os.getenv("API_URL")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+API_ID = int(os.getenv("API_ID"))
+API_HASH = os.getenv("API_HASH")
+
+bot = Client("movie_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 
 @bot.on_message(filters.private & filters.text)
 async def movie_handler(client, message):
