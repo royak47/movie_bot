@@ -2,7 +2,7 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
 
-API_URL = "https://your-backend-url.onrender.com/search"
+API_URL = "https://movie-bot-afgg.onrender.com/search"
 
 bot = Client("movie_bot", bot_token="7427633281:AAHRsU_1u_Pjc9Eo3dBwAVG6G1jutaSZy9I", api_id=12345, api_hash="your_api_hash")
 
