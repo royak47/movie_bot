@@ -14,38 +14,50 @@ HEADERS = {
     "Referer": "https://www.terabox.com/",
 }
 
-BASE_URL = "https://www.terabox.com"
+# ✅ Added your link:
+SHARE_IDS = [
+    ("1liFTNgdtX64k3BjKVhmd2Q", ""),  # Your real TeraBox link, no password
+]
 
-def get_subscribed_share_links():
-    url = "https://www.terabox.com/share/rec_list?order=share_time&desc=true&start=0&limit=100"
-    resp = requests.get(url, headers=HEADERS)
-    result = resp.json()
+BASE_FILE_LIST_URL = "https://www.terabox.com/share/list"
 
-    share_links = []
-    for item in result.get("list", []):
-        surl = item.get("shorturl")
-        if surl:
-            link = f"{BASE_URL}/s/{surl}"
-            if "pwd" in item:
-                link += f"?pwd={item['pwd']}"
-            share_links.append({
-                "title": item.get("title", "Untitled"),
-                "terabox_url": link
+def get_files_from_folder(surl, pwd=""):
+    params = {
+        "app_id": "250528",
+        "shorturl": surl,
+        "root": "1",
+        "desc": "1",
+        "order": "time",
+        "page": "1",
+        "num": "100",
+        "pwd": pwd
+    }
+    res = requests.get(BASE_FILE_LIST_URL, headers=HEADERS, params=params)
+    data = res.json()
+    result = []
+    for item in data.get("list", []):
+        if item["isdir"] == 0:  # file only
+            filename = item["server_filename"]
+            dlink = f"https://www.terabox.com/s/{surl}?pwd={pwd}" if pwd else f"https://www.terabox.com/s/{surl}"
+            result.append({
+                "title": filename,
+                "terabox_url": dlink
             })
-
-    return share_links
+    return result
 
 def main():
-    movies = get_subscribed_share_links()
-
-    if not movies:
-        print("❌ No subscribed movies found.")
-        return
+    all_movies = []
+    for surl, pwd in SHARE_IDS:
+        try:
+            files = get_files_from_folder(surl, pwd)
+            print(f"✅ Fetched from {surl}: {len(files)} files")
+            all_movies.extend(files)
+        except Exception as e:
+            print(f"❌ Error from {surl}: {str(e)}")
 
     with open("movie_db.json", "w", encoding="utf-8") as f:
-        json.dump(movies, f, indent=2, ensure_ascii=False)
-
-    print(f"✅ Fetched {len(movies)} movie links from subscribed channels.")
+        json.dump(all_movies, f, indent=2, ensure_ascii=False)
+    print("🎉 movie_db.json created with real TeraBox movies.")
 
 if __name__ == "__main__":
     main()
