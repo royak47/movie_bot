@@ -17,7 +17,7 @@ API_HASH = os.getenv("API_HASH")
 REDIRECT_BASE = os.getenv("REDIRECT_BASE")
 BOT_USERNAME = os.getenv("BOT_USERNAME")
 UPLOAD_CHANNEL = int(os.getenv("UPLOAD_CHANNEL"))
-SEARCH_GROUP = int(os.getenv("SEARCH_CHANNEL"))  # group where users type movie names
+SEARCH_GROUP = int(os.getenv("SEARCH_GROUP"))  # group where users type movie names
 
 MOVIE_DB_FILE = "movie_db.json"
 
