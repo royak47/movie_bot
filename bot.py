@@ -5,23 +5,23 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from dotenv import load_dotenv
 
-# ✅ FastAPI for Render port requirement
+# ✅ Optional FastAPI for Render
 from fastapi import FastAPI
 import uvicorn
 import threading
 
-# Load .env variables
+# Load .env
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 REDIRECT_BASE = os.getenv("REDIRECT_BASE")
-BOT_USERNAME = os.getenv("BOT_USERNAME")
-UPLOAD_CHANNEL = int(os.getenv("UPLOAD_CHANNEL"))
-SEARCH_CHANNEL = int(os.getenv("SEARCH_CHANNEL"))
+BOT_USERNAME = os.getenv("BOT_USERNAME")  # without @
+UPLOAD_CHANNEL = int(os.getenv("UPLOAD_CHANNEL"))  # private channel where you forward files
+SEARCH_CHANNEL = int(os.getenv("SEARCH_CHANNEL"))  # group where users search
 MOVIE_DB_FILE = "movie_db.json"
 
-# FastAPI for health check
+# FastAPI setup
 app = FastAPI()
 
 @app.get("/")
@@ -32,10 +32,10 @@ def run_fastapi():
     port = int(os.getenv("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
 
-# Bot instance
+# Pyrogram bot
 bot = Client("movie_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# Load & Save DB
+# 📁 DB Functions
 def load_db():
     if not os.path.exists(MOVIE_DB_FILE):
         return []
@@ -50,10 +50,10 @@ def save_db(data):
         json.dump(data, f, indent=2)
 
 def slugify(text):
-    text = re.sub(r'https?://\S+', '', text)
-    return re.sub(r'\W+', '', text.lower().replace(" ", ""))
+    clean = re.sub(r'https?://\S+', '', text)  # remove links
+    return re.sub(r'\W+', '', clean.lower().replace(" ", ""))
 
-# 🟢 Add movie when forwarded in private channel
+# 🎬 Forward from UPLOAD_CHANNEL -> Save to DB
 @bot.on_message(filters.channel & (filters.video | filters.document))
 async def channel_add_movie(client, message):
     if message.chat.id != UPLOAD_CHANNEL:
@@ -77,28 +77,33 @@ async def channel_add_movie(client, message):
     save_db(db)
     print(f"✅ Added: {title} | slug: {slug}")
 
-# 🔍 Respond in public channel when movie name is typed
-@bot.on_message(filters.channel & filters.text)
-async def search_from_channel(client, message):
+# 👥 Group message triggers movie search
+@bot.on_message(filters.group & filters.text)
+async def search_from_group(client, message):
     if message.chat.id != SEARCH_CHANNEL:
         return
 
     query = message.text.lower().strip()
     db = load_db()
-    matches = [m for m in db if query in m["title"].lower()]
+
+    matches = [
+        m for m in db
+        if any(q in m["title"].lower() for q in query.split())
+    ]
 
     if matches:
-        for movie in matches:
+        for movie in matches[:3]:  # max 3 results
             slug = movie["slug"]
             redirect_link = f"https://t.me/{BOT_USERNAME}?start={slug}"
             await message.reply_text(
-                f"🎬 **{movie['title']}**\n👉 [Click here to Activate & Download]({redirect_link})",
-                disable_web_page_preview=True
+                f"🎬 **{movie['title']}**\n👉 [Click to Activate]({redirect_link})",
+                disable_web_page_preview=True,
+                reply_to_message_id=message.message_id
             )
     else:
-        print(f"No match found for: {query}")
+        print(f"❌ No match for: {query}")
 
-# 🔗 Start with slug in private chat
+# 🔗 Handle /start=slug in DM
 @bot.on_message(filters.private & filters.command("start"))
 async def start_handler(client, message):
     if len(message.command) > 1:
@@ -114,9 +119,9 @@ async def start_handler(client, message):
                 reply_markup=button
             )
             return
-    await message.reply("👋 Welcome! Forward movie to upload channel or search in public channel.")
+    await message.reply("👋 Welcome! Just send movie name in group or forward in upload channel.")
 
-# 🔁 Run bot + web
+# 🔃 Start Bot + Web
 def run_bot():
     bot.run()
 
