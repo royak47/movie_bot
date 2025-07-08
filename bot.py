@@ -5,18 +5,31 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from dotenv import load_dotenv
 
-# Load from .env file
-load_dotenv()
+# 🟢 Optional FastAPI for Render port requirement
+from fastapi import FastAPI
+import uvicorn
+import threading
 
+app = FastAPI()
+
+@app.get("/")
+def home():
+    return {"status": "Bot is running!"}
+
+def run_fastapi():
+    port = int(os.getenv("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
+# 🔒 Load secrets
+load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
+REDIRECT_BASE = os.getenv("REDIRECT_BASE")
 MOVIE_DB_FILE = "movie_db.json"
-REDIRECT_BASE = os.getenv("REDIRECT_BASE")  # e.g., https://downloadterabox.com/go/
 
 bot = Client("movie_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 
-# Helper functions
 def load_db():
     if not os.path.exists(MOVIE_DB_FILE):
         return []
@@ -30,7 +43,6 @@ def save_db(data):
 def slugify(text):
     return re.sub(r'\W+', '', text.lower().replace(" ", ""))
 
-# Auto add movie when forwarded in channel
 @bot.on_message(filters.channel & (filters.video | filters.document))
 async def channel_add_movie(client, message):
     title = message.caption or "Untitled Movie"
@@ -39,7 +51,7 @@ async def channel_add_movie(client, message):
 
     db = load_db()
     if any(m['slug'] == slug for m in db):
-        return  # already exists
+        return
 
     db.append({
         "title": title.strip(),
@@ -50,7 +62,6 @@ async def channel_add_movie(client, message):
     save_db(db)
     print(f"✅ Added: {title}")
 
-# Handle /start=slug to send redirect button
 @bot.on_message(filters.private & filters.command("start"))
 async def start_handler(client, message):
     if len(message.command) > 1:
@@ -68,4 +79,10 @@ async def start_handler(client, message):
             return
     await message.reply("👋 Welcome! Forward movies in the channel to auto-activate.")
 
-bot.run()
+def run_bot():
+    bot.run()
+
+# Start both FastAPI + Bot
+if __name__ == "__main__":
+    threading.Thread(target=run_fastapi).start()
+    run_bot()
