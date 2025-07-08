@@ -103,3 +103,14 @@ def run_bot():
 if __name__ == "__main__":
     threading.Thread(target=run_api).start()
     run_bot()
+    
+async def keep_alive():
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                await session.get("https://movie-bot-afgg.onrender.com/")
+        except:
+            pass
+        await asyncio.sleep(600)
+
+bot.add_task(keep_alive())
