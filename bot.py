@@ -4,10 +4,24 @@ import re
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from dotenv import load_dotenv
+
+# ✅ Optional FastAPI for Render's port binding
 from fastapi import FastAPI
 import uvicorn
 import threading
 
+# ⏬ Load .env variables
+load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+API_ID = int(os.getenv("API_ID"))
+API_HASH = os.getenv("API_HASH")
+REDIRECT_BASE = os.getenv("REDIRECT_BASE")
+BOT_USERNAME = os.getenv("BOT_USERNAME")
+UPLOAD_CHANNEL = int(os.getenv("UPLOAD_CHANNEL"))
+SEARCH_CHANNEL = int(os.getenv("SEARCH_CHANNEL"))
+MOVIE_DB_FILE = "movie_db.json"
+
+# ✅ Bot + Web API setup
 app = FastAPI()
 
 @app.get("/")
@@ -18,48 +32,33 @@ def run_fastapi():
     port = int(os.getenv("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
 
-# 🔐 Load Environment
-load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-API_ID = int(os.getenv("API_ID"))
-API_HASH = os.getenv("API_HASH")
-REDIRECT_BASE = os.getenv("REDIRECT_BASE", "https://downloadterabox.com/go/")
-FORCE_JOIN = os.getenv("FORCE_JOIN", "@scripthub0")
-MOVIE_DB_FILE = "movie_db.json"
-UPLOAD_CHANNEL = int(os.getenv("UPLOAD_CHANNEL_ID"))  # Channel A (Movie Upload)
-SEARCH_CHANNEL = int(os.getenv("SEARCH_CHANNEL_ID"))  # Channel B (Public users)
+bot = Client("movie_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-bot = Client("movie_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
-
+# 📁 Helpers for DB
 def load_db():
     if not os.path.exists(MOVIE_DB_FILE):
         return []
-    with open(MOVIE_DB_FILE, "r") as f:
-        try:
+    try:
+        with open(MOVIE_DB_FILE, "r") as f:
             return json.load(f)
-        except:
-            return []
+    except:
+        return []
 
 def save_db(data):
     with open(MOVIE_DB_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
 def slugify(text):
-    return re.sub(r'\W+', '', text.lower().replace(" ", ""))
+    clean = re.sub(r'https?://\S+', '', text)  # remove links
+    return re.sub(r'\W+', '', clean.lower().replace(" ", ""))
 
-def clean_title(text):
-    junk = ["Backup Grup Must join", "🔥", "👉", "👈"]
-    for j in junk:
-        text = text.replace(j, "")
-    return text.strip()
-
-# ✅ Auto Save from Upload Channel
+# 🎬 Forward movie to private channel — auto save to DB
 @bot.on_message(filters.channel & (filters.video | filters.document))
-async def save_movie(client, message):
+async def channel_add_movie(client, message):
     if message.chat.id != UPLOAD_CHANNEL:
         return
 
-    title = clean_title(message.caption or "Untitled")
+    title = message.caption or "Untitled Movie"
     file_id = message.video.file_id if message.video else message.document.file_id
     slug = slugify(title)
 
@@ -69,7 +68,7 @@ async def save_movie(client, message):
         return
 
     db.append({
-        "title": title,
+        "title": title.strip(),
         "slug": slug,
         "file_id": file_id,
         "redirect": f"{REDIRECT_BASE}{slug}"
@@ -77,51 +76,44 @@ async def save_movie(client, message):
     save_db(db)
     print(f"✅ Added: {title} | slug: {slug}")
 
-# ✅ Listen in Search Channel
+# 👥 Detect messages in public channel and send user to bot
 @bot.on_message(filters.channel & filters.text)
-async def handle_public_channel(client, message):
+async def search_from_channel(client, message):
     if message.chat.id != SEARCH_CHANNEL:
         return
 
-    query = message.text.lower()
+    query = message.text.lower().strip()
     db = load_db()
-    results = [m for m in db if query in m['title'].lower()]
-    if not results:
-        return
+    matched = next((m for m in db if query in m["title"].lower()), None)
 
-    slug = results[0]['slug']
-    reply_markup = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🎬 Get Download Link", url=f"https://t.me/{bot.me.username}?start={slug}")
-    ]])
-    await message.reply("🔗 Movie link found! Tap below to open bot in DM.", reply_markup=reply_markup)
+    if matched:
+        slug = matched["slug"]
+        redirect_link = f"https://t.me/{BOT_USERNAME}?start={slug}"
+        await message.reply_text(
+            f"🎬 **{matched['title']}**\n👉 Click to Activate: [Link]({redirect_link})",
+            disable_web_page_preview=True
+        )
 
-# ✅ DM Handler with /start=<slug>
+# 🟢 Handle /start=slug in private
 @bot.on_message(filters.private & filters.command("start"))
-async def dm_start(client, message):
-    if len(message.command) == 2:
+async def start_handler(client, message):
+    if len(message.command) > 1:
         slug = message.command[1]
         db = load_db()
-        movie = next((m for m in db if m['slug'] == slug), None)
-        if not movie:
-            return await message.reply("❌ Movie not found.")
+        movie = next((m for m in db if m["slug"] == slug), None)
+        if movie:
+            button = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🎬 Activate Now", url=movie["redirect"])]
+            ])
+            await message.reply(
+                f"🎬 {movie['title']}\nClick below to activate & get movie:",
+                reply_markup=button
+            )
+            return
+    await message.reply("👋 Welcome! Just forward movies in upload channel to activate.")
 
-        member = await bot.get_chat_member(f"@{FORCE_JOIN}", message.from_user.id)
-        if member.status not in ("member", "administrator", "creator"):
-            join_btn = InlineKeyboardMarkup([[
-                InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{FORCE_JOIN}")
-            ]])
-            return await message.reply("⚠️ Please join our channel to unlock the movie.", reply_markup=join_btn)
-
-        btn = InlineKeyboardMarkup([[
-            InlineKeyboardButton("🎬 Download Now", url=movie['redirect'])
-        ]])
-        return await message.reply(f"🎬 {movie['title']}\nClick below to download:", reply_markup=btn)
-
-    await message.reply("👋 Welcome! Send /start=<slug> or use the search channel.")
-
-# Start All
+# 🔃 Run both
 def run_bot():
-    print("🚀 Bot is running...")
     bot.run()
 
 if __name__ == "__main__":
